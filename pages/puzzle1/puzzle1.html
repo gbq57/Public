@@ -91,7 +91,7 @@
       font-size: 1.2rem;
       margin: 0.8rem 0 0;
     }
-    #restore-positions {
+    #restore-positions, .choose-image {
       border: 1px solid #121212;
       border-radius: 999px;
       background: #fff;
@@ -105,10 +105,11 @@
       color: #888;
       cursor: default;
     }
-    #restore-positions:focus-visible {
+    #restore-positions:focus-visible, .choose-image:focus-within {
       outline: 3px solid #2457b3;
       outline-offset: 3px;
     }
+    .choose-image { display: inline-block; margin-bottom: 1rem; }
     .colour-options {
       display: flex;
       flex-wrap: wrap;
@@ -158,6 +159,7 @@
           <span id="paste-feedback-message"></span>
         </div>
       </div>
+      <label class="choose-image">Choose image<input id="choose-image" class="visually-hidden" type="file" accept="image/*"></label>
       <p id="image-status" class="visually-hidden" role="status">Loading saved image...</p>
       <p id="paste-date" class="visually-hidden" hidden></p>
     </section>
@@ -191,7 +193,7 @@
     </section>
     <dialog id="replace-dialog" aria-labelledby="replace-message">
       <form method="dialog">
-        <p id="replace-message">An image was already pasted today. Replace it and its tile arrangement?</p>
+        <p id="replace-message">An image was already added today. Replace it and its tile arrangement?</p>
         <div class="dialog-actions">
           <button value="cancel" autofocus>Cancel</button>
           <button value="replace">Replace</button>
@@ -204,6 +206,7 @@
   <script>
     const imageStatus = document.querySelector("#image-status");
     const imagePreview = document.querySelector("#clipboard-image");
+    const imageChooser = document.querySelector("#choose-image");
     const feedbackMessage = document.querySelector("#paste-feedback-message");
     const puzzleControls = document.querySelector("#puzzle-controls");
     const replaceDialog = document.querySelector("#replace-dialog");
@@ -293,7 +296,7 @@
 
     function showPasteDate() {
       pasteDateDisplay.hidden = false;
-      pasteDateDisplay.textContent = currentPasteDate ? `Image pasted on: ${currentPasteDate}.` : "Paste date not recorded for this saved image.";
+      pasteDateDisplay.textContent = currentPasteDate ? `Image added on: ${currentPasteDate}.` : "Date not recorded for this saved image.";
     }
 
     function loadImage(image) {
@@ -465,6 +468,17 @@
         window.alert(imageStatus.textContent);
         return;
       }
+      await addImage(image);
+    });
+
+    imageChooser.addEventListener("change", () => {
+      const image = imageChooser.files?.[0];
+      imageChooser.value = "";
+      if (image) addImage(image);
+    });
+
+    async function addImage(image) {
+      if (pasteInProgress) return;
       pasteInProgress = true;
       await initialImageLoaded;
       const today = localDate();
@@ -477,7 +491,7 @@
       currentPasteDate = today;
       showPasteDate();
       showImage(image);
-      imageStatus.textContent = "Image pasted. Saving it in this browser...";
+      imageStatus.textContent = "Image added. Saving it in this browser...";
       const saveImage = accessImageStorage("readwrite", (store) => {
         store.delete("marks");
         store.delete("layout");
@@ -486,11 +500,11 @@
       });
       currentImageSaved = saveImage.then(() => true, () => false);
       saveImage.then(() => {
-        if (revision === imageRevision) imageStatus.textContent = "Image saved in this browser. Paste another image to replace it.";
+        if (revision === imageRevision) imageStatus.textContent = "Image saved in this browser. Choose or paste another image to replace it.";
       }).catch(() => {
         if (revision === imageRevision) imageStatus.textContent = "Image displayed, but browser storage is unavailable. It will not be restored after reloading.";
       });
-    });
+    }
   </script>
 </body>
 </html>

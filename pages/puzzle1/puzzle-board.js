@@ -3,7 +3,9 @@
     const colours = new Set(['black', 'yellow', 'green', 'blue', 'purple']);
     const slots = [], tiles = new Map(), views = [];
     const maxWidth = Math.max(...rows.map(row => row.width));
-    container.style.maxWidth = `${maxWidth}px`;
+    // Keep large screenshots manageable on wide monitors while allowing the
+    // board to shrink naturally to the available width on a phone.
+    container.style.maxWidth = `${Math.min(maxWidth, 600)}px`;
     rows.forEach((row, rowIndex) => {
       const view = document.createElement('div');
       view.className = 'row-view';
