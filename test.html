@@ -9,7 +9,20 @@
   <main>
     <h1>Test page</h1>
     <p>This is a test page.</p>
+    <p id="javascript-status" aria-live="polite">JavaScript has not run yet.</p>
+    <button id="test-button" type="button">Click to test JavaScript</button>
     <p><a href="index.html">Back to the home page</a></p>
   </main>
+  <script>
+    const status = document.querySelector("#javascript-status");
+    const button = document.querySelector("#test-button");
+    let clickCount = 0;
+
+    status.textContent = "JavaScript is running. Click the button to test it.";
+    button.addEventListener("click", () => {
+      clickCount += 1;
+      status.textContent = `JavaScript is working. Button clicked ${clickCount} time${clickCount === 1 ? "" : "s"}.`;
+    });
+  </script>
 </body>
 </html>
