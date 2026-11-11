@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Puzzle 1</title>
+  <style>
+    .paste-controls {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      margin: 1rem 0;
+    }
+    #paste-area, #paste-feedback {
+      box-sizing: border-box;
+      width: 6rem;
+      height: 6rem;
+      border: 1px dashed #777;
+      border-radius: 0.4rem;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 0.4rem;
+      overflow: hidden;
+    }
+    #paste-area { cursor: text; }
+    #paste-area:empty::before { content: "Paste here"; }
+    #paste-feedback { border-style: solid; border-color: #ddd; font-size: 0.8rem; }
+    #paste-feedback-message {
+      max-width: 100%;
+      max-height: 100%;
+      overflow: auto;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    #clipboard-image:not([hidden]) {
+      display: block;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
+    }
+    dialog { max-width: min(24rem, 85vw); border: 1px solid #777; border-radius: 0.5rem; }
+    dialog::backdrop { background: rgb(0 0 0 / 35%); }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 0.6rem; }
+    #detected-rows canvas {
+      display: block;
+      max-width: 100%;
+      height: auto;
+    }
+    .row-view {
+      position: relative;
+      max-width: 100%;
+    }
+    .tile-target {
+      position: absolute;
+      border: 0;
+      border-radius: 6%;
+      padding: 0;
+      background: transparent;
+      cursor: pointer;
+      touch-action: none;
+      user-select: none;
+    }
+    .tile-target:focus-visible {
+      outline: 3px solid #2457b3;
+      outline-offset: 1px;
+    }
+    .tile-ghost {
+      position: fixed;
+      z-index: 1000;
+      pointer-events: none;
+      opacity: 0.9;
+    }
+    .colour-picker {
+      border: 0;
+      padding: 0;
+      margin: 1rem 0;
+    }
+    .drag-instruction {
+      font-size: 1.2rem;
+      margin: 0.8rem 0 0;
+    }
+    #restore-positions {
+      border: 1px solid #121212;
+      border-radius: 999px;
+      background: #fff;
+      color: #121212;
+      padding: 0.8rem 1.25rem;
+      font: 600 0.95rem Arial, sans-serif;
+      cursor: pointer;
+    }
+    #restore-positions:disabled {
+      border-color: #aaa;
+      color: #888;
+      cursor: default;
+    }
+    #restore-positions:focus-visible {
+      outline: 3px solid #2457b3;
+      outline-offset: 3px;
+    }
+    .colour-options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.9rem;
+      padding: 0.5rem;
+    }
+    .colour-choice {
+      position: relative;
+      display: inline-flex;
+      cursor: pointer;
+    }
+    .colour-choice input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+    }
+    .colour-choice span {
+      display: block;
+      width: 2.75rem;
+      height: 2.75rem;
+      border-radius: 50%;
+      background: var(--swatch);
+      transition: outline-offset 150ms ease, transform 150ms ease;
+    }
+    .colour-choice input:checked + span {
+      outline: 3px solid #121212;
+      outline-offset: 3px;
+      transform: scale(1.04);
+    }
+    .colour-choice input:focus-visible + span {
+      box-shadow: 0 0 0 4px #fff, 0 0 0 7px #2457b3;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .colour-choice span { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Puzzle 1</h1>
+    <section aria-label="Clipboard image">
+      <div class="paste-controls">
+        <div id="paste-area" contenteditable="true" role="textbox" aria-label="Paste an image here" aria-multiline="false"></div>
+        <div id="paste-feedback" aria-live="polite">
+          <img id="clipboard-image" alt="Image without a detected puzzle" hidden>
+          <span id="paste-feedback-message"></span>
+        </div>
+      </div>
+      <p id="image-status" class="visually-hidden" role="status">Loading saved image...</p>
+      <p id="paste-date" class="visually-hidden" hidden></p>
+    </section>
+    <section aria-label="Puzzle">
+      <p id="rows-status" class="visually-hidden" role="status">Paste a screenshot to find the grid.</p>
+      <div id="detected-rows"></div>
+      <div id="puzzle-controls" hidden>
+      <p class="drag-instruction">Drag tiles to reposition.</p>
+      <fieldset class="colour-picker" aria-label="Tile colour">
+        <div class="colour-options">
+          <label class="colour-choice" title="Black" style="--swatch: #5a594e">
+            <input type="radio" name="mark-colour" value="black" aria-label="Black" checked><span aria-hidden="true"></span>
+          </label>
+          <label class="colour-choice" title="Yellow" style="--swatch: #f9df6e">
+            <input type="radio" name="mark-colour" value="yellow" aria-label="Yellow"><span aria-hidden="true"></span>
+          </label>
+          <label class="colour-choice" title="Green" style="--swatch: #a0c45a">
+            <input type="radio" name="mark-colour" value="green" aria-label="Green"><span aria-hidden="true"></span>
+          </label>
+          <label class="colour-choice" title="Blue" style="--swatch: #b1c4ef">
+            <input type="radio" name="mark-colour" value="blue" aria-label="Blue"><span aria-hidden="true"></span>
+          </label>
+          <label class="colour-choice" title="Purple" style="--swatch: #ba81c5">
+            <input type="radio" name="mark-colour" value="purple" aria-label="Purple"><span aria-hidden="true"></span>
+          </label>
+        </div>
+      </fieldset>
+      <button id="restore-positions" type="button" disabled>Restore original positions</button>
+      <p id="mark-status" role="status"></p>
+      </div>
+    </section>
+    <dialog id="replace-dialog" aria-labelledby="replace-message">
+      <form method="dialog">
+        <p id="replace-message">An image was already pasted today. Replace it and its tile arrangement?</p>
+        <div class="dialog-actions">
+          <button value="cancel" autofocus>Cancel</button>
+          <button value="replace">Replace</button>
+        </div>
+      </form>
+    </dialog>
+  </main>
+  <script src="grid-detection.js"></script>
+  <script src="puzzle-board.js"></script>
+  <script>
+    const imageStatus = document.querySelector("#image-status");
+    const imagePreview = document.querySelector("#clipboard-image");
+    const feedbackMessage = document.querySelector("#paste-feedback-message");
+    const puzzleControls = document.querySelector("#puzzle-controls");
+    const replaceDialog = document.querySelector("#replace-dialog");
+    const rowsStatus = document.querySelector("#rows-status");
+    const rowsContainer = document.querySelector("#detected-rows");
+    const markStatus = document.querySelector("#mark-status");
+    const pasteDateDisplay = document.querySelector("#paste-date");
+    const restorePositionsButton = document.querySelector("#restore-positions");
+    const markColours = new Set(["black", "yellow", "green", "blue", "purple"]);
+    let currentImageUrl = null;
+    let pasteInProgress = false;
+    let imageRevision = 0;
+    let gridRevision = 0;
+    let marksRevision = 0;
+    let detectedRows = [];
+    let puzzleBoard = null;
+    let currentPasteDate = null;
+    let currentImageSaved = Promise.resolve(false);
+    let imageDatabasePromise = null;
+    let imageStorageQueue = Promise.resolve();
+
+    function getImageDatabase() {
+      if (!imageDatabasePromise) {
+        imageDatabasePromise = new Promise((resolve, reject) => {
+          const request = indexedDB.open("public-test-page-images", 1);
+          request.onupgradeneeded = () => {
+            request.result.createObjectStore("images");
+          };
+          request.onsuccess = () => {
+            const database = request.result;
+            database.onversionchange = () => {
+              database.close();
+              imageDatabasePromise = null;
+            };
+            resolve(database);
+          };
+          request.onerror = () => reject(request.error || new Error("Could not open image storage."));
+        }).catch((error) => {
+          imageDatabasePromise = null;
+          throw error;
+        });
+      }
+      return imageDatabasePromise;
+    }
+
+    function accessImageStorage(mode, operation) {
+      const result = imageStorageQueue.then(async () => {
+        const database = await getImageDatabase();
+        return new Promise((resolve, reject) => {
+          const transaction = database.transaction("images", mode);
+          const request = operation(transaction.objectStore("images"));
+          let requestResult;
+          request.onsuccess = () => { requestResult = request.result; };
+          transaction.oncomplete = () => resolve(requestResult);
+          transaction.onerror = () => reject(transaction.error || new Error("Image storage failed."));
+          transaction.onabort = () => reject(transaction.error || new Error("Image storage was cancelled."));
+        });
+      });
+      imageStorageQueue = result.catch(() => {});
+      return result;
+    }
+
+    function saveBoard(message) {
+      restorePositionsButton.disabled = !puzzleBoard.hasMoved();
+      markStatus.textContent = "";
+      const revision = imageRevision;
+      const markVersion = ++marksRevision;
+      const layout = puzzleBoard.snapshot();
+      currentImageSaved.then((saved) => {
+        if (revision !== imageRevision) return;
+        if (!saved) throw new Error("The current image was not saved.");
+        return accessImageStorage("readwrite", (store) => {
+          store.delete("marks");
+          return store.put(layout, "layout");
+        });
+      }).catch(() => {
+        if (revision === imageRevision && markVersion === marksRevision) {
+          markStatus.textContent = "The tile changed, but its arrangement could not be saved in this browser.";
+        }
+      });
+    }
+
+    function localDate() {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    }
+
+    function showPasteDate() {
+      pasteDateDisplay.hidden = false;
+      pasteDateDisplay.textContent = currentPasteDate ? `Image pasted on: ${currentPasteDate}.` : "Paste date not recorded for this saved image.";
+    }
+
+    function loadImage(image) {
+      const url = URL.createObjectURL(image);
+      return new Promise((resolve, reject) => {
+        const sourceImage = new Image();
+        sourceImage.onload = () => {
+          URL.revokeObjectURL(url);
+          resolve(sourceImage);
+        };
+        sourceImage.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error("The screenshot could not be decoded."));
+        };
+        sourceImage.src = url;
+      });
+    }
+
+    async function showGridFailure(message, revision, notify) {
+      rowsStatus.textContent = message;
+      imagePreview.hidden = false;
+      try { await imagePreview.decode(); } catch { /* The preview may also be unreadable. */ }
+      if (revision !== gridRevision) return;
+      // Allow the browser to paint the thumbnail before the blocking alert.
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      if (notify && revision === gridRevision) window.alert(message);
+    }
+
+    async function findRows(image, restoreMarks = false) {
+      const revision = ++gridRevision;
+      detectedRows = [];
+      puzzleBoard?.destroy();
+      puzzleBoard = null;
+      restorePositionsButton.disabled = true;
+      puzzleControls.hidden = true;
+      imagePreview.hidden = true;
+      feedbackMessage.textContent = "";
+      rowsContainer.replaceChildren();
+      rowsStatus.textContent = "Finding the grid...";
+      try {
+        const sourceImage = await loadImage(image);
+        if (revision !== gridRevision) return;
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        if (revision !== gridRevision) return;
+
+        const sourceCanvas = document.createElement("canvas");
+        sourceCanvas.width = sourceImage.naturalWidth;
+        sourceCanvas.height = sourceImage.naturalHeight;
+        const sourceContext = sourceCanvas.getContext("2d", { willReadFrequently: true });
+        sourceContext.drawImage(sourceImage, 0, 0);
+        const original = sourceContext.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
+
+        const scale = Math.min(1, 1600 / Math.max(sourceCanvas.width, sourceCanvas.height));
+        const sampleCanvas = document.createElement("canvas");
+        sampleCanvas.width = Math.max(1, Math.round(sourceCanvas.width * scale));
+        sampleCanvas.height = Math.max(1, Math.round(sourceCanvas.height * scale));
+        const sampleContext = sampleCanvas.getContext("2d", { willReadFrequently: true });
+        sampleContext.drawImage(sourceImage, 0, 0, sampleCanvas.width, sampleCanvas.height);
+        const sample = sampleContext.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height);
+        const grid = GridDetection.detectGrid(sample);
+        if (!grid) {
+          await showGridFailure("No grid found.", revision, !restoreMarks);
+          return;
+        }
+
+        const originalGrid = GridDetection.scaleGrid(grid,
+          sourceCanvas.width / sampleCanvas.width, sourceCanvas.height / sampleCanvas.height);
+        const rows = GridDetection.extractRows(original, originalGrid);
+        if (revision !== gridRevision) return;
+        let savedLayout = null;
+        let savedMarks = null;
+        let marksCouldNotBeRestored = false;
+        if (restoreMarks) {
+          try {
+            savedLayout = await accessImageStorage("readonly", (store) => store.get("layout"));
+            if (!savedLayout) savedMarks = await accessImageStorage("readonly", (store) => store.get("marks"));
+          } catch {
+            marksCouldNotBeRestored = true;
+          }
+          if (revision !== gridRevision) return;
+        }
+        detectedRows = rows;
+        markStatus.textContent = marksCouldNotBeRestored
+          ? "The saved tile arrangement could not be restored in this browser."
+          : "";
+        puzzleBoard = PuzzleBoard.create(rowsContainer, rows, {
+          saved: savedLayout,
+          legacyMarks: savedMarks,
+          selectedColour: () => document.querySelector('input[name="mark-colour"]:checked')?.value || "black",
+          onChange: saveBoard
+        });
+        restorePositionsButton.disabled = !puzzleBoard.hasMoved();
+        puzzleControls.hidden = false;
+        imagePreview.hidden = true;
+        feedbackMessage.textContent = "";
+        rowsStatus.textContent = rows.some((row) => row.overlayDetected)
+          ? "Grid found. Tap a tile to mark it, or drag it to swap positions. A grey overlay touched the left edge; that edge was reconstructed, but anything hidden behind it cannot be recovered."
+          : "Grid found. Tap a tile to mark it, or drag it to swap positions.";
+      } catch (error) {
+        if (revision === gridRevision) {
+          console.error("Grid detection failed:", error);
+          await showGridFailure("The image could not be processed. Try another image.", revision, !restoreMarks);
+        }
+      }
+    }
+
+    function showImage(image, restoreMarks = false) {
+      const nextImageUrl = URL.createObjectURL(image);
+      const previousImageUrl = currentImageUrl;
+      currentImageUrl = nextImageUrl;
+      imagePreview.src = nextImageUrl;
+      imagePreview.hidden = true;
+      feedbackMessage.textContent = "";
+      if (previousImageUrl) {
+        URL.revokeObjectURL(previousImageUrl);
+      }
+      findRows(image, restoreMarks);
+    }
+
+    restorePositionsButton.addEventListener("click", () => puzzleBoard?.restore());
+
+    imagePreview.addEventListener("error", () => {
+      imagePreview.hidden = true;
+      feedbackMessage.textContent = "Image preview unavailable.";
+    });
+
+    const initialImageRevision = imageRevision;
+    const initialImageLoaded = (async () => {
+      try {
+        const image = await accessImageStorage("readonly", (store) => store.get("current"));
+        const date = image ? await accessImageStorage("readonly", (store) => store.get("pasteDate")) : null;
+        if (initialImageRevision !== imageRevision) return;
+        if (image) {
+          currentPasteDate = typeof date === "string" ? date : null;
+          showPasteDate();
+          currentImageSaved = Promise.resolve(true);
+          showImage(image, true);
+          imageStatus.textContent = "Saved image restored. Paste another image to replace it.";
+        } else {
+          imageStatus.textContent = "No saved image. Copy a screenshot and paste it here.";
+        }
+      } catch {
+        if (initialImageRevision === imageRevision) imageStatus.textContent = "Browser storage is unavailable. Images can be displayed but not saved.";
+      }
+    })();
+
+    function confirmReplacement() {
+      return new Promise((resolve) => {
+        replaceDialog.returnValue = "cancel";
+        replaceDialog.addEventListener("close", () => resolve(replaceDialog.returnValue === "replace"), { once: true });
+        replaceDialog.showModal();
+        replaceDialog.querySelector('[value="cancel"]').focus();
+      });
+    }
+
+    document.addEventListener("paste", async (event) => {
+      event.preventDefault();
+      if (pasteInProgress) return;
+      const items = Array.from(event.clipboardData?.items || []);
+      const imageItem = items.find((item) => item.kind === "file" && item.type.startsWith("image/"));
+      const image = imageItem?.getAsFile() || Array.from(event.clipboardData?.files || [])
+        .find((file) => file.type.startsWith("image/"));
+      if (!image) {
+        const clipboardText = event.clipboardData?.getData("text/plain") || "";
+        imageStatus.textContent = "No image found.";
+        imagePreview.hidden = true;
+        feedbackMessage.textContent = clipboardText ? `${imageStatus.textContent}\n\n${clipboardText}` : imageStatus.textContent;
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        window.alert(imageStatus.textContent);
+        return;
+      }
+      pasteInProgress = true;
+      await initialImageLoaded;
+      const today = localDate();
+      if (currentImageUrl && currentPasteDate === today && !await confirmReplacement()) {
+        pasteInProgress = false;
+        return;
+      }
+      pasteInProgress = false;
+      const revision = ++imageRevision;
+      currentPasteDate = today;
+      showPasteDate();
+      showImage(image);
+      imageStatus.textContent = "Image pasted. Saving it in this browser...";
+      const saveImage = accessImageStorage("readwrite", (store) => {
+        store.delete("marks");
+        store.delete("layout");
+        store.put(today, "pasteDate");
+        return store.put(image, "current");
+      });
+      currentImageSaved = saveImage.then(() => true, () => false);
+      saveImage.then(() => {
+        if (revision === imageRevision) imageStatus.textContent = "Image saved in this browser. Paste another image to replace it.";
+      }).catch(() => {
+        if (revision === imageRevision) imageStatus.textContent = "Image displayed, but browser storage is unavailable. It will not be restored after reloading.";
+      });
+    });
+  </script>
+</body>
+</html>
