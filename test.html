@@ -16,12 +16,39 @@
   <script>
     const status = document.querySelector("#javascript-status");
     const button = document.querySelector("#test-button");
+    const storageKey = "public-test-click-count";
     let clickCount = 0;
+    let persistentStorageAvailable = true;
 
-    status.textContent = "JavaScript is running. Click the button to test it.";
+    try {
+      const savedCount = Number.parseInt(localStorage.getItem(storageKey), 10);
+      if (Number.isFinite(savedCount) && savedCount >= 0) {
+        clickCount = savedCount;
+      }
+    } catch {
+      persistentStorageAvailable = false;
+    }
+
+    function updateStatus() {
+      const persistenceMessage = persistentStorageAvailable
+        ? "This count is saved in this browser."
+        : "Browser storage is unavailable, so this count will reset when the page closes.";
+      status.textContent = `JavaScript is running. Button clicked ${clickCount} time${clickCount === 1 ? "" : "s"}. ${persistenceMessage}`;
+    }
+
+    updateStatus();
     button.addEventListener("click", () => {
       clickCount += 1;
-      status.textContent = `JavaScript is working. Button clicked ${clickCount} time${clickCount === 1 ? "" : "s"}.`;
+
+      if (persistentStorageAvailable) {
+        try {
+          localStorage.setItem(storageKey, String(clickCount));
+        } catch {
+          persistentStorageAvailable = false;
+        }
+      }
+
+      updateStatus();
     });
   </script>
 </body>
